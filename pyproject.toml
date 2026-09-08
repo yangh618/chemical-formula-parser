@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crystalfno-discovery"
+version = "0.1.0"
+description = "External validation and novel-composition discovery pipeline around a frozen CrystalFNO model."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "BSD-3-Clause" }
+authors = [{ name = "CrystalFNO development" }]
+keywords = ["materials", "crystals", "structure-prediction", "SMACT", "OPTIMADE"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pandas>=2.0",
+    "pymatgen>=2024.10.1",
+    "ase>=3.23",
+    "spglib>=2.2",
+    "smact>=2.7",
+    "requests>=2.31",
+    "tqdm>=4.66",
+    "PyYAML>=6.0",
+    "h5py>=3.10",
+    "joblib>=1.3",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.4"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

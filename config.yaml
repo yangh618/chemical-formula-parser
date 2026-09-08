@@ -1,0 +1,89 @@
+# =============================================================================
+# CrystalFNO external validation & novel-composition discovery — configuration
+# =============================================================================
+# This package does NOT train CrystalFNO or any other machine-learning model.
+# CrystalFNO is used later as a frozen (pretrained) model.
+
+# Element universe used for SMACT generation and for per-chemistry database
+# enumeration. Tune to the chemistry space of interest (default: refractory /
+# superalloy chemistry relevant for CrystalFNO structural prediction).
+elements:
+  - Al
+  - Cr
+  - Co
+  - Mo
+  - Nb
+  - Ta
+  - Ti
+  - V
+  - W
+  - Zr
+
+# SMACT generation settings -------------------------------------------------
+smact:
+  # Number of distinct elements per candidate formula.
+  num_elements:
+    - 2
+    - 3
+    - 4
+  # Maximum stoichiometric coefficient of any element in a candidate.
+  max_stoich: 8
+  # Oxidation-state source. Accepted by SMACT >= 3: smact14, icsd16,
+  # icsd24, pymatgen_sp, wiki, or a path to a custom file.
+  oxidation_states: icsd24
+  charge_neutrality: true
+  # Enables/disables the Pauling electronegativity (EN) test.
+  electronegativity: false
+  # Treat pure elemental / all-metallic compositions as (alloy) valid.
+  include_alloys: true
+
+# Filtering settings --------------------------------------------------------
+filters:
+  min_elements: 2
+  max_elements: 6
+  max_atoms: 200
+  remove_partial_occupancy: true
+  remove_disordered: true
+
+# Databases -----------------------------------------------------------------
+databases:
+  cod: true
+  oqmd: true
+  jarvis: true
+  aflow: false
+
+# Materials Project ----------------------------------------------------------
+# The user already has a pretrained (MP-trained) CrystalFNO model. If a local
+# MP metadata export (e.g. a .csv with a 'reduced_formula' column) is
+# provided it is used for: training-set-overlap removal, formula-unseen
+# external tests and novelty filtering. The pipeline works without it.
+materials_project:
+  metadata_file: null
+
+# Network / IO settings ------------------------------------------------------
+network:
+  timeout_seconds: 60
+  retries: 5
+  backoff_factor: 1.5
+  # Minimum seconds between requests (politeness / rate limiting).
+  rate_limit_seconds: 0.35
+  page_limit: 100
+  # Base URLs (verified against the live services in Sep 2026). These are
+  # overridable so the code does not hard-code endpoints everywhere.
+  endpoints:
+    cod_cif: "https://www.crystallography.net/cod/{cod_id}.cif"
+    cod_optimade: "https://www.crystallography.net/cod/optimade/v1/structures"
+    oqmd_optimade: "https://oqmd.org/optimade/v1/structures"
+    oqmd_rest: "https://oqmd.org/oqmdapi/formationenergy"
+    jarvis_optimade: "https://jarvis.nist.gov/optimade/jarvisdft/v1/structures"
+    aflow_aflux: "https://aflow.org/API/aflux/"
+
+# Ranking -------------------------------------------------------------------
+ranking:
+  # Modular, deterministic, heuristic ranking criteria (not machine learning).
+  enabled: true
+  criteria:
+    - n_elements
+    - stoich_complexity
+    - tm_count
+    - smact_validity_strength
