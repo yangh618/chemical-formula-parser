@@ -34,8 +34,12 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=7.4"]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools]
+packages = ["databases", "novelty", "smactlib", "validation"]
+py-modules = ["common", "config", "database_utils", "formula_utils", "structure_utils"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

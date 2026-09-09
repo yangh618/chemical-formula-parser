@@ -21,12 +21,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from crystalfno_discovery import database_utils as du  # noqa: E402
-from crystalfno_discovery.common import configure_logging  # noqa: E402
-from crystalfno_discovery.config import get, get_project_root  # noqa: E402
-from crystalfno_discovery.novelty.canonicalize import canonicalize_formula  # noqa: E402
-from crystalfno_discovery.smact import filters as smact_filters  # noqa: E402
-from crystalfno_discovery.smact.generator import generate_formulas  # noqa: E402
+import database_utils as du  # noqa: E402
+from common import configure_logging  # noqa: E402
+from config import get, get_project_root  # noqa: E402
+from novelty.canonicalize import canonicalize_formula  # noqa: E402
+from smactlib import filters as smact_filters  # noqa: E402
+from smactlib.generator import generate_formulas  # noqa: E402
 
 ROOT = get_project_root()
 

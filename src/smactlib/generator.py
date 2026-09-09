@@ -20,7 +20,7 @@ import itertools
 import logging
 from typing import Iterable
 
-from ..formula_utils import normalize_formula
+from formula_utils import normalize_formula
 
 logger = logging.getLogger(__name__)
 

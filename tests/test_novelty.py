@@ -5,13 +5,13 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from crystalfno_discovery.novelty import (
+from novelty import (
     KnownIndex,
     annotate,
     build_known_index,
     canonicalize_formula,
 )
-from crystalfno_discovery.validation import load_formulas
+from validation import load_formulas
 
 
 def _known_df():
@@ -80,13 +80,13 @@ def test_empty_known_index_treats_all_as_unseen():
 
 @pytest.mark.parametrize("bad", ["", "BogusZZ", "Xx", "NotARealElem2"])
 def test_bad_inputs_safe(bad):
-    from crystalfno_discovery.novelty import safe_canonicalize_formula
+    from novelty import safe_canonicalize_formula
 
     assert safe_canonicalize_formula(bad) is None
 
 
 def test_whitespace_formula_accepted():
-    from crystalfno_discovery.novelty import safe_canonicalize_formula
+    from novelty import safe_canonicalize_formula
 
     assert safe_canonicalize_formula("Al2CrNb ") is not None
     assert safe_canonicalize_formula("Al") is not None  # single element is a valid formula

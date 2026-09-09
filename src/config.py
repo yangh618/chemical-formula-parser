@@ -75,13 +75,13 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 def get_project_root() -> Path:
     """Return the project root directory (the one holding ``config.yaml``)."""
-    # This module lives at <root>/src/crystalfno_discovery/config.py
+    # This module lives at <root>/src/config.py
     here = Path(__file__).resolve()
-    for candidate in (here.parents[2], here.parents[3], here.parents[4]):
+    for candidate in here.parents[:5]:
         if (candidate / CONFIG_FILENAME).exists():
             return candidate
-    # Fall back to the repository layout root.
-    return here.parents[3]
+    # Fall back to the directory holding this source tree.
+    return here.parents[1]
 
 
 def resolve_config_path() -> Path:
@@ -104,7 +104,7 @@ def load_config() -> dict[str, Any]:
 
 
 # Module-level singleton, populated lazily so callers can simply
-# ``from crystalfno_discovery.config import CFG``.
+# ``from config import CFG``.
 CFG: dict[str, Any] = load_config()
 
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from crystalfno_discovery.smact import filters as f
-from crystalfno_discovery.smact.generator import generate_formulas, oxidation_states
+from smactlib import filters as f
+from smactlib.generator import generate_formulas, oxidation_states
 
 
 def test_oxide_generation():

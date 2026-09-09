@@ -7,7 +7,7 @@ from typing import Optional
 
 import numpy as np
 
-from ..formula_utils import (
+from formula_utils import (
     FormulaError,
     get_anonymous_formula,
     get_elemental_fraction_vector,

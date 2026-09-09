@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from ..formula_utils import composition_distance, element_set_distance
+from formula_utils import composition_distance, element_set_distance
 from .canonicalize import CanonicalFormula
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class KnownIndex:
 
     def finalize(self) -> None:
         """Cache fractional vectors for distance queries (sampled if huge)."""
-        from ..formula_utils import get_elemental_fraction_vector
+        from formula_utils import get_elemental_fraction_vector
 
         order = sorted(self.all_formulas)
         if len(order) > 50000:

@@ -28,10 +28,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from crystalfno_discovery import database_utils as du  # noqa: E402
-from crystalfno_discovery.common import configure_logging  # noqa: E402
-from crystalfno_discovery.config import get_project_root  # noqa: E402
-from crystalfno_discovery.novelty import (  # noqa: E402
+import database_utils as du  # noqa: E402
+from common import configure_logging  # noqa: E402
+from config import get_project_root  # noqa: E402
+from novelty import (  # noqa: E402
     KnownIndex,
     annotate,
     build_known_index,

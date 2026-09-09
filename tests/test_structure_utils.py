@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from pymatgen.core import Lattice, Structure
 
-from crystalfno_discovery.structure_utils import (
+from structure_utils import (
     compare_structures,
     lattice_errors,
     radial_distribution,
@@ -82,7 +82,7 @@ def test_cif_roundtrip_and_parse(tmp_path):
     st = _nacl()
     path = tmp_path / "nacl.cif"
     save_cif(st, str(path))
-    from crystalfno_discovery.database_utils import parse_structure_file
+    from database_utils import parse_structure_file
 
     _s, meta, status, _r = parse_structure_file(path, database="COD", database_id="t")
     assert status == "valid"

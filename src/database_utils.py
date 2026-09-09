@@ -20,9 +20,9 @@ import numpy as np
 import requests
 from pymatgen.core import Lattice, Structure
 
-from .common import RateLimiter
-from .formula_utils import FormulaError, get_anonymous_formula, get_elements, normalize_formula
-from .structure_utils import (
+from common import RateLimiter
+from formula_utils import FormulaError, get_anonymous_formula, get_elements, normalize_formula
+from structure_utils import (
     METADATA_COLUMNS,
     site_issues,
     structure_to_metadata,
@@ -82,7 +82,8 @@ class NetClient:
                     raise requests.HTTPError(f"HTTP {resp.status_code} for {url}", response=resp)
                 resp.raise_for_status()
                 return resp
-            except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as exc:
+            except (requests.ConnectionError, requests.Timeout, requests.HTTPError,
+                    requests.exceptions.ChunkedEncodingError) as exc:
                 last_exc = exc
                 wait = self.backoff_factor ** (attempt - 1)
                 logger.warning("Request failed (%s) attempt %d/%d for %s; retrying in %.1fs",
@@ -350,7 +351,7 @@ def build_known_formula_database(
 
 def default_provenance_path() -> Path:
     """Return ``data/metadata/provenance.json`` under the project root."""
-    from .config import get_project_root
+    from config import get_project_root
 
     return get_project_root() / "data" / "metadata" / "provenance.json"
 

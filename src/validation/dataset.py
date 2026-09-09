@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from ..formula_utils import FormulaError, normalize_formula
+from formula_utils import FormulaError, normalize_formula
 
 
 class CrystalFNOInterface(ABC):

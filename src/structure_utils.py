@@ -20,7 +20,7 @@ from pymatgen.analysis.structure_matcher import StructureMatcher
 from pymatgen.core import Composition, Structure
 from pymatgen.core.periodic_table import Element
 
-from .formula_utils import FormulaError, normalize_formula
+from formula_utils import FormulaError, normalize_formula
 
 # Tolerance (Angstrom) below which two atoms are considered overlapping.
 _OVERLAP_TOL = 0.5

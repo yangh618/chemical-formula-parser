@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from ..formula_utils import safe_normalize_formula
+from formula_utils import safe_normalize_formula
 from .generator import oxidation_states
 
 logger = logging.getLogger(__name__)

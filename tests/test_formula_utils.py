@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from crystalfno_discovery.formula_utils import (
+from formula_utils import (
     FormulaError,
     composition_distance,
     element_set,
