@@ -142,3 +142,43 @@ These are conservative labels, **not** claims of new material.
   disable a source. Per-formula results use `error` instead of failing the run.
 - **No novelty flagged** - make sure `known_formulas.csv` exists and has a
   `formula` column.
+
+## 10. Building a known-formula DB from local datasets
+
+`scripts/extract_known_formulas.py` turns the locally downloaded datasets into a
+known-formula reference **without any database server** (a custom streaming
+extractor). Symlink or point at the datasets via `datasets/COD-Dataset` and
+`datasets/OQMD-Dataset` (both ignored by git).
+
+```bash
+# COD: walk the CIF mirror, read _chemical_formula_sum from each entry
+python scripts/extract_known_formulas.py cod \
+    --cod-dir datasets/COD-Dataset/cif --output data/formulas/known_cod.csv
+
+# OQMD: stream the MySQL dump and pull compositions.formula (no MySQL needed)
+python scripts/extract_known_formulas.py oqmd \
+    --dump datasets/OQMD-Dataset/qmdb__v1_8__022026.sql/qmdb_20260129_release.sql \
+    --output data/formulas/known_oqmd.csv
+
+# merge into the reference used by find_novel_formulas.py
+python scripts/extract_known_formulas.py merge \
+    --inputs data/formulas/known_cod.csv data/formulas/known_oqmd.csv \
+    --output data/formulas/known_formulas.csv
+```
+
+Both extractors canonicalise to reduced formulas and write
+`formula,database,database_id,anonymous_formula,elements`.
+
+- COD reads only each CIF's header (`--header-bytes`, default 16 KB) so a full
+  112 GB mirror can be scanned without parsing structures.
+- OQMD streams the dump line-by-line via a small tuple parser, so the ~100 GB
+  MySQL import (and a server) is not required; `.sql` and `.sql.gz` both work.
+- `--limit` scans only N records (fast testing); `--log-every` controls progress.
+
+After extraction, re-run `find_novel_formulas.py` to get novelty relative to the
+real COD/OQMD formulas:
+
+```bash
+python scripts/find_novel_formulas.py --candidates data/formulas/candidates.csv \
+    --known data/formulas/known_formulas.csv --out data/formulas/novel_formulas.csv --novel-only
+```

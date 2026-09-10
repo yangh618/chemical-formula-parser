@@ -11,3 +11,10 @@
 - Made `NetClient` retry mid-stream `ChunkedEncodingError` connection drops.
 - Added `run_formula_search.sh`, `manual.md`, `tutorial.md`, `FAQ.md` and a
   generated example set `data/formulas/novel_1000.csv`.
+
+### Unreleased
+
+- Added `scripts/extract_known_formulas.py` (`cod` / `oqmd` / `merge`): a custom
+  streaming extractor that builds a known-formula database from local COD (CIF
+  mirror) and OQMD (MySQL dump) datasets without a database server.
+- Ignore `datasets/` and the bulk `known_cod.csv` / `known_oqmd.csv` extracts.

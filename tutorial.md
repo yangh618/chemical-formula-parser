@@ -92,3 +92,26 @@ not search, and many different crystal structures can share one formula.
 - Fewer elements and smaller `--max-stoich` = much faster.
 - 3-element combos over 10 metals at `max_stoich 8` already yields tens of
   thousands of candidates (about 12 s to generate here).
+
+## Step 6 - Use your real COD/OQMD datasets as the "known" set
+
+If you downloaded the COD CIF mirror and the OQMD dump, build the reference from
+them (no MySQL needed) and re-screen:
+
+```bash
+python scripts/extract_known_formulas.py cod \
+    --cod-dir datasets/COD-Dataset/cif --output data/formulas/known_cod.csv
+python scripts/extract_known_formulas.py oqmd \
+    --output data/formulas/known_oqmd.csv
+python scripts/extract_known_formulas.py merge \
+    --inputs data/formulas/known_cod.csv data/formulas/known_oqmd.csv \
+    --output data/formulas/known_formulas.csv
+
+python scripts/find_novel_formulas.py --candidates data/formulas/candidates.csv \
+    --known data/formulas/known_formulas.csv --out data/formulas/novel_formulas.csv --novel-only
+head -n 1001 data/formulas/novel_formulas.csv > data/formulas/novel_1000.csv
+```
+
+The full COD/OQMD extraction reads hundreds of GB, so run it from a normal
+terminal (not a short-lived session). `--limit` scans only a sample for a quick
+test first.

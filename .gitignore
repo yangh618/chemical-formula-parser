@@ -21,6 +21,13 @@ logs/
 data/raw/
 data/structures/
 
+# Large local datasets (COD mirror / OQMD dump) - never commit; symlinked here
+datasets/
+
+# Bulk known-formula extracts (regenerate with scripts/extract_known_formulas.py)
+data/formulas/known_cod.csv
+data/formulas/known_oqmd.csv
+
 # OS / editor
 .DS_Store
 Thumbs.db
