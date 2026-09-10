@@ -182,3 +182,18 @@ real COD/OQMD formulas:
 python scripts/find_novel_formulas.py --candidates data/formulas/candidates.csv \
     --known data/formulas/known_formulas.csv --out data/formulas/novel_formulas.csv --novel-only
 ```
+
+### Materials Project (API only)
+
+The Materials Project has no bulk dump - access is API-only, needs a free key
+(https://materialsproject.org/api), and is rate-limited. Install the client and
+run:
+
+```bash
+pip install mp-api                  # modern MP client
+export MP_API_KEY=xxxxxxxxxxxxxxxx  # or pass --api-key
+python scripts/extract_known_formulas.py mp --output data/formulas/known_mp.csv
+```
+
+`extract_known_formulas.py merge` includes `known_mp.csv` automatically if present.
+Respect the Materials Project terms of use; do not bulk-redistribute the data.

@@ -18,3 +18,4 @@
   streaming extractor that builds a known-formula database from local COD (CIF
   mirror) and OQMD (MySQL dump) datasets without a database server.
 - Ignore `datasets/` and the bulk `known_cod.csv` / `known_oqmd.csv` extracts.
+- Added `mp` subcommand (Materials Project API export; requires `mp-api` + API key).

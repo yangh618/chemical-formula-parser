@@ -28,6 +28,7 @@ import argparse
 import csv
 import gzip
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -279,6 +280,56 @@ def cmd_oqmd(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# mp: query the Materials Project API (requires an API key + mp-api)
+# ---------------------------------------------------------------------------
+
+def cmd_mp(args: argparse.Namespace) -> int:
+    api_key = args.api_key or os.environ.get("MP_API_KEY") or os.environ.get("PMG_MAPI_KEY")
+    if not api_key:
+        logger.error(
+            "No Materials Project API key found. Set MP_API_KEY (or pass --api-key). "
+            "Get a free key at https://materialsproject.org/api")
+        return 2
+    try:
+        from mp_api.client import MPRester
+    except ImportError:
+        logger.error("The Materials Project client is not installed: pip install mp-api")
+        return 2
+
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    seen_ids: set[str] = set()
+    count = 0
+    invalid = 0
+    logger.info("Querying Materials Project summary docs (this can take a while)...")
+    with MPRester(api_key) as mpr:
+        docs = mpr.materials.summary.search(fields=["material_id", "formula_pretty"])
+        for doc in docs:
+            count += 1
+            if args.limit and count > args.limit:
+                break
+            mid = str(getattr(doc, "material_id", "") or "")
+            formula = getattr(doc, "formula_pretty", None)
+            if mid in seen_ids:
+                continue
+            seen_ids.add(mid)
+            canon = canon_formula(formula) if formula else None
+            if canon is None:
+                invalid += 1
+                continue
+            if canon in seen:
+                continue
+            seen.add(canon)
+            rows.append(row_for(canon, "MP", mid))
+            if args.log_every and count % args.log_every == 0:
+                logger.info("MP: %d docs (%d unique formulas)", count, len(rows))
+
+    logger.info("MP: %d docs -> %d unique formulas (%d unparseable)", count, len(rows), invalid)
+    write_rows(rows, Path(args.output))
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # merge: combine per-database extractor outputs into known_formulas.csv
 # ---------------------------------------------------------------------------
 
@@ -326,9 +377,17 @@ def build_parser() -> argparse.ArgumentParser:
     oqmd.add_argument("--log-every", type=int, default=500000)
     oqmd.set_defaults(func=cmd_oqmd)
 
+    mp = sub.add_parser("mp", help="query the Materials Project API for formulas (needs an API key)")
+    mp.add_argument("--api-key", default=None, help="MP API key (or set MP_API_KEY)")
+    mp.add_argument("--output", default="data/formulas/known_mp.csv")
+    mp.add_argument("--limit", type=int, default=None, help="max docs to read (testing)")
+    mp.add_argument("--log-every", type=int, default=20000)
+    mp.set_defaults(func=cmd_mp)
+
     merge = sub.add_parser("merge", help="merge per-database CSVs into known_formulas.csv")
     merge.add_argument("--inputs", nargs="+",
-                       default=["data/formulas/known_cod.csv", "data/formulas/known_oqmd.csv"])
+                       default=["data/formulas/known_cod.csv", "data/formulas/known_oqmd.csv",
+                                "data/formulas/known_mp.csv"])
     merge.add_argument("--output", default="data/formulas/known_formulas.csv")
     merge.set_defaults(func=cmd_merge)
     return parser
