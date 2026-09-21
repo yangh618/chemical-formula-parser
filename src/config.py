@@ -59,6 +59,28 @@ DEFAULTS: dict[str, Any] = {
         },
     },
     "ranking": {"enabled": True, "criteria": ["n_elements", "stoich_complexity", "tm_count", "smact_validity_strength"]},
+    "search_spaces": {
+        "oxychalcogenides": {
+            "enabled": True,
+            "cation_pool": ["La", "Ce", "Pr", "Nd", "Sm", "Eu", "Gd", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni"],
+            "anion_pool": ["O", "S", "Se", "Te"],
+            "max_stoich": 8,
+            "max_total_atoms": 20,
+        },
+        "phosphorus_chalcogenides": {
+            "enabled": True,
+            "transition_metal_pool": ["Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu"],
+            "chalcogen_pool": ["S", "Se", "Te"],
+            "max_stoich": 8,
+            "max_total_atoms": 20,
+        },
+        "double_perovskites": {
+            "enabled": True,
+            "a_site_pool": ["La", "Nd", "Sm", "Eu", "Gd", "Ca", "Sr", "Ba"],
+            "b_site_pool": ["Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Nb", "Mo", "W"],
+            "max_results": 5000,
+        },
+    },
 }
 
 

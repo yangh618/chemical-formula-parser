@@ -35,7 +35,7 @@ dependencies = [
 test = ["pytest>=7.4"]
 
 [tool.setuptools]
-packages = ["databases", "novelty", "smactlib", "validation"]
+packages = ["databases", "novelty", "smactlib", "validation", "search_spaces"]
 py-modules = ["common", "config", "database_utils", "formula_utils", "structure_utils"]
 
 [tool.setuptools.package-dir]
