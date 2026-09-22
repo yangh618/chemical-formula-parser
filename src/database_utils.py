@@ -68,7 +68,7 @@ class NetClient:
         self.rate_limiter = RateLimiter(rate_limit_seconds)
         self.session = requests.Session()
         self.session.headers.update(
-            headers or {"User-Agent": "crystalfno-discovery/0.1 (+research; contact: local)"}
+            headers or {"User-Agent": "chemical-formula-parser/0.1 (+research; contact: local)"}
         )
 
     def _request(self, method: str, url: str, **kwargs: Any) -> requests.Response:

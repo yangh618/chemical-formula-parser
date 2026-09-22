@@ -1,4 +1,4 @@
-"""Abstract CrystalFNO interface and formula-loading convenience."""
+"""Abstract structure-predictor interface and formula-loading convenience."""
 
 from __future__ import annotations
 
@@ -11,11 +11,11 @@ import pandas as pd
 from formula_utils import FormulaError, normalize_formula
 
 
-class CrystalFNOInterface(ABC):
-    """Abstract interface a pretrained (frozen) CrystalFNO model must satisfy.
+class StructurePredictorInterface(ABC):
+    """Abstract interface a structure-prediction model must satisfy.
 
     Subclass this with your own model wrapper. This package does **not**
-    implement, train or modify the CrystalFNO neural network.
+    implement or train any prediction model.
     """
 
     @abstractmethod

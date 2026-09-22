@@ -29,7 +29,7 @@ class RateLimiter:
 
 
 def configure_logging(
-    name: str = "crystalfno_discovery",
+    name: str = "chemical_formula_parser",
     log_dir: str | Path = "logs",
     log_filename: str | None = None,
     level: int = logging.INFO,

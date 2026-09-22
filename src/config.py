@@ -18,7 +18,7 @@ import yaml
 CONFIG_FILENAME = "config.yaml"
 
 # Environment variable that may point at an alternative configuration file.
-CONFIG_ENV = "CRYSTALFNO_DISCOVERY_CONFIG"
+CONFIG_ENV = "CHEMICAL_FORMULA_PARSER_CONFIG"
 
 # ---------------------------------------------------------------------------
 # Built-in defaults. They mirror config.yaml so that the package is usable

@@ -1,24 +1,21 @@
-# CrystalFNO Novel-Composition Discovery (SMACT)
+# Chemical Formula Parser
 
-A Python toolkit for **generating chemically plausible candidate compositions** and
-screening them as **database-unseen (novel) formulas**, ready to feed a frozen
-(pretrained) **CrystalFNO** crystal-structure generation model.
+A Python toolkit for **parsing, generating and screening chemical formulas**.
+It enumerates chemically plausible candidate compositions, screens them for
+validity with SMACT, filters against known databases (COD, MP, OQMD) to find
+database-unseen (novel) formulas, and selects maximally diverse subsets.
 
 This is a *download-free* workflow. The heavy bulk-database download scripts
 (COD/OQMD/JARVIS/AFLOW full collections) were removed; instead:
 
 - **`generate_formulas.py`** — enumerate SMACT-valid candidate compositions over an
-element universe and write `data/formulas/candidates.csv`;
+  element universe and write `data/formulas/candidates.csv`;
 - **`merge_known_formulas.py`** — merge the local COD/MP/OQMD formula lists into a
   single `datasets/known_formulas.csv` holding every unique formula exactly once;
 - **`find_novel_formulas.py`** — flag which candidates are absent from a supplied
-*known-formulas* list (`data/formulas/known_formulas.csv`) and rank them;
+  *known-formulas* list (`data/formulas/known_formulas.csv`) and rank them;
 - **`search_known_formulas.py`** — ask the live databases (COD / OQMD / JARVIS)
-whether a proposed formula already exists, without downloading anything.
-
-> **This package does NOT train CrystalFNO or any other model.** CrystalFNO is only
-> ever *consumed* through a small abstract interface (`CrystalFNOInterface.predict`)
-> that you connect your own trained model to later.
+  whether a proposed formula already exists, without downloading anything.
 
 > **Terminology.** Candidates produced here are **database-unseen compositions** or
 > **database- and literature-unreported candidates**. This code never claims "new
@@ -45,9 +42,6 @@ whether a proposed formula already exists, without downloading anything.
                        |                          (live COD/OQMD/JARVIS lookup)
                        v
         data/formulas/novel_formulas.csv
-                       |
-                       v
-    frozen CrystalFNO (your model) ---> predicted structures
 ```
 
 **What is the *known* list?** There are two ways to supply it:
@@ -78,7 +72,7 @@ Python 3.11 is the target (tested against 3.11/3.13).
 
 ```bash
 conda env create -f environment.yml
-conda activate crystalfno-discovery
+conda activate chemical-formula-parser
 ```
 
 **pip**
@@ -98,7 +92,7 @@ python -m pytest
 
 `config.yaml` holds the element universe, SMACT parameters, filters and network
 settings. Nothing is hard-coded in source; the top-level `config` module loads it
-(`CRYSTALFNO_DISCOVERY_CONFIG` overrides the path).
+(`CHEMICAL_FORMULA_PARSER_CONFIG` overrides the path).
 
 ```yaml
 elements: [Al, Cr, Co, Mo, Nb, Ta, Ti, V, W, Zr]    # default refractory space
@@ -253,19 +247,19 @@ composition vectors, element sets and the `composition_distance` /
 `element_set_distance` baselines (for "near-known but unseen" screening) are
 provided here too.
 
-## 8. Connecting CrystalFNO
+## 8. Structure-prediction interface
 
-The package never trains a model. Implement the small interface and feed it
-your novel candidates:
+The package ships a small abstract interface for downstream structure-prediction
+models. Implement it and feed it your novel candidates:
 
 ```python
-from validation import CrystalFNOInterface, load_formulas
+from validation import StructurePredictorInterface, load_formulas
 
-class MyFNO(CrystalFNOInterface):
+class MyModel(StructurePredictorInterface):
     def predict(self, formula):
         ...
 
-model = MyFNO()
+model = MyModel()
 for formula in load_formulas("data/formulas/novel_formulas.csv", as_dataframe=False):
     predicted = model.predict(formula)
 ```
@@ -299,13 +293,12 @@ The code deliberately **never** asserts any of these:
 2. "New formula" ⇒ a new crystal structure (many structures share a formula).
 3. "SMACT-valid" ⇒ thermodynamically stable — SMACT is a chemical-plausibility
    filter only.
-4. "CrystalFNO predicts a structure" ⇒ experimentally realisable.
-5. "Low predicted energy" ⇒ stable — requires a valid reference / convex-hull
+4. "Low predicted energy" ⇒ stable — requires a valid reference / convex-hull
    calculation against the correct competing phases.
 
 Use the vocabulary *database-unseen composition*, *candidate composition*,
-*predicted structure*, and *candidate material*. The pipeline stops at candidate +
-predicted structures; relaxation and hull-based stability screening are downstream,
+*predicted structure*, and *candidate material*. The pipeline stops at candidate
+generation; relaxation and hull-based stability screening are downstream,
 out of scope, and deliberately not faked here.
 
 ## 11. Known limitations

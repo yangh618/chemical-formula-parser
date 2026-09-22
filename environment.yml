@@ -1,4 +1,4 @@
-name: crystalfno-discovery
+name: chemical-formula-parser
 channels:
   - conda-forge
 dependencies:

@@ -1,11 +1,11 @@
-"""CrystalFNO interface + external benchmark/dataset helpers.
+"""Structure-predictor interface + external benchmark/dataset helpers.
 
-This package only defines the *interface* to a frozen CrystalFNO model. It does
-not train CrystalFNO or any other machine-learning model (section 19).
+This package defines a small abstract interface that downstream structure-
+prediction models can implement.  It does not train or ship any model.
 """
 
 from __future__ import annotations
 
-from .dataset import CrystalFNOInterface, load_formulas
+from .dataset import StructurePredictorInterface, load_formulas
 
-__all__ = ["CrystalFNOInterface", "load_formulas"]
+__all__ = ["StructurePredictorInterface", "load_formulas"]

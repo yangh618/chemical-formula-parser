@@ -1,12 +1,10 @@
 # =============================================================================
-# CrystalFNO external validation & novel-composition discovery — configuration
+# Chemical Formula Parser — configuration
 # =============================================================================
-# This package does NOT train CrystalFNO or any other machine-learning model.
-# CrystalFNO is used later as a frozen (pretrained) model.
 
 # Element universe used for SMACT generation and for per-chemistry database
 # enumeration. Tune to the chemistry space of interest (default: refractory /
-# superalloy chemistry relevant for CrystalFNO structural prediction).
+# superalloy chemistry).
 elements:
   - Al
   - Cr
@@ -53,9 +51,8 @@ databases:
   aflow: false
 
 # Materials Project ----------------------------------------------------------
-# The user already has a pretrained (MP-trained) CrystalFNO model. If a local
-# MP metadata export (e.g. a .csv with a 'reduced_formula' column) is
-# provided it is used for: training-set-overlap removal, formula-unseen
+# If a local MP metadata export (e.g. a .csv with a 'reduced_formula' column)
+# is provided it is used for: training-set-overlap removal, formula-unseen
 # external tests and novelty filtering. The pipeline works without it.
 materials_project:
   metadata_file: null

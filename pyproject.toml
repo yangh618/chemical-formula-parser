@@ -3,14 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "crystalfno-discovery"
+name = "chemical-formula-parser"
 version = "0.1.0"
-description = "External validation and novel-composition discovery pipeline around a frozen CrystalFNO model."
+description = "Chemical formula parser, generator and novelty screening toolkit."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "BSD-3-Clause"
-authors = [{ name = "CrystalFNO development" }]
-keywords = ["materials", "crystals", "structure-prediction", "SMACT", "OPTIMADE"]
+authors = [{ name = "Chemical Formula Parser developers" }]
+keywords = ["chemistry", "formula-parser", "materials", "SMACT", "OPTIMADE"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Intended Audience :: Science/Research",
