@@ -19,6 +19,7 @@ from .filters import (
     charge_neutral,
     electronegativity_valid,
     oxidation_states_available,
+    screen_formulas,
     smact_valid,
 )
 from .generator import generate_formulas
@@ -29,4 +30,5 @@ __all__ = [
     "charge_neutral",
     "electronegativity_valid",
     "oxidation_states_available",
+    "screen_formulas",
 ]

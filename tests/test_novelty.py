@@ -90,3 +90,252 @@ def test_whitespace_formula_accepted():
 
     assert safe_canonicalize_formula("Al2CrNb ") is not None
     assert safe_canonicalize_formula("Al") is not None  # single element is a valid formula
+
+
+# ---------------------------------------------------------------------------
+# generate_novel_candidates: adaptive limit + optional validator hook
+# ---------------------------------------------------------------------------
+
+class _FakeSpace:
+    """Minimal stand-in for CompositionSpace: returns a fixed candidate list."""
+
+    def __init__(self, candidates):
+        self._candidates = list(candidates)
+        self.limits: list[int] = []
+
+    def generate(self, max_results=None, **_):
+        self.limits.append(max_results)
+        return self._candidates[: max_results or len(self._candidates)]
+
+
+def test_generate_novel_candidates_scales_limit_until_target_met():
+    from novelty_filter import generate_novel_candidates
+
+    candidates = [f"C{i}" for i in range(50)]
+    known = {f"C{i}" for i in range(40)}  # only the last 10 are novel
+    space = _FakeSpace(candidates)
+
+    result = generate_novel_candidates(space, 10, known, base_limit=20, growth=2.0, verbose=False)
+
+    assert result.target_met is True
+    assert result.novel_found == 10
+    assert result.known_filtered == 40
+    assert space.limits == [20, 40, 80]  # grew until the target was met
+
+
+def test_generate_novel_candidates_validator_drops_rejected():
+    from novelty_filter import generate_novel_candidates
+
+    candidates = ["NaCl", "Al2O3", "FeX2", "TiO2"]
+    space = _FakeSpace(candidates)
+    validator = lambda f: f != "FeX2"  # noqa: E731
+
+    result = generate_novel_candidates(space, 3, set(), validator=validator, verbose=False)
+
+    assert result.rejected_by_validator == 1
+    assert result.novel == ["NaCl", "Al2O3", "TiO2"]
+    assert result.total_generated == 4
+
+
+def test_generate_novel_candidates_without_validator_rejects_nothing():
+    from novelty_filter import generate_novel_candidates
+
+    space = _FakeSpace(["NaCl", "Al2O3"])
+    result = generate_novel_candidates(space, 2, set(), verbose=False)
+
+    assert result.rejected_by_validator == 0
+    assert result.novel == ["NaCl", "Al2O3"]
+
+
+def test_generate_novel_candidates_reports_exhausted_space():
+    from novelty_filter import generate_novel_candidates
+
+    space = _FakeSpace(["NaCl", "Al2O3"])
+    result = generate_novel_candidates(space, 100, set(), base_limit=50, verbose=False)
+
+    assert result.target_met is False
+    assert result.space_exhausted is True
+    assert result.novel_found == 2
+
+
+def test_generate_novel_candidates_passes_through_generate_kwargs():
+    from novelty_filter import generate_novel_candidates
+
+    class _Recording(_FakeSpace):
+        def generate(self, max_results=None, **kwargs):
+            self.kwargs = kwargs
+            return super().generate(max_results=max_results, **kwargs)
+
+    space = _Recording(["NaCl"])
+    generate_novel_candidates(space, 1, set(), per_combo_limit=4, max_cations=3, verbose=False)
+
+    assert space.kwargs == {"per_combo_limit": 4, "max_cations": 3}
+
+
+# ---------------------------------------------------------------------------
+# Merged unique-formula CSV (datasets/known_formulas.csv) support
+# ---------------------------------------------------------------------------
+
+def _merged_fixture(tmp_path):
+    """Three tiny per-database CSVs with deliberate cross-database overlap."""
+    (tmp_path / "cod_formulas.csv").write_text(
+        "formula\nAc(AgAs)2\nNbAl2Cr\nTiO2\n", encoding="utf-8")
+    (tmp_path / "mp_formulas.csv").write_text(
+        "formula\nNbAl2Cr\nFe2O3\n", encoding="utf-8")
+    (tmp_path / "oqmd_formulas.csv").write_text(
+        "formula\nNbAl2Cr\nZrO2\n", encoding="utf-8")
+
+
+def test_merge_database_csv_files_writes_each_unique_formula_once(tmp_path):
+    import csv
+
+    from novelty_filter import merge_database_csv_files
+
+    _merged_fixture(tmp_path)
+    result = merge_database_csv_files(datasets_dir=tmp_path)
+
+    assert result.output_path == tmp_path / "known_formulas.csv"
+    assert result.per_database == {"cod": 3, "mp": 2, "oqmd": 2}
+    assert result.overlap_removed == 2          # NbAl2Cr counted once, not thrice
+    assert result.total_unique == 5
+
+    with open(result.output_path, newline="", encoding="utf-8") as f:
+        rows = {r["formula"]: r["databases"] for r in csv.DictReader(f)}
+
+    assert sorted(rows) == ["AcAg2As2", "Fe2O3", "NbAl2Cr", "TiO2", "ZrO2"]
+    assert rows["AcAg2As2"] == "cod"            # polyatomic group flattened
+    assert rows["NbAl2Cr"] == "cod;mp;oqmd"     # provenance preserved
+
+
+def test_merge_database_csv_files_subset_and_custom_output(tmp_path):
+    from novelty_filter import merge_database_csv_files
+
+    _merged_fixture(tmp_path)
+    out = tmp_path / "sub" / "cod_mp.csv"
+    result = merge_database_csv_files(
+        datasets_dir=tmp_path, databases=["cod", "mp"], output_path=out)
+
+    assert set(result.per_database) == {"cod", "mp"}
+    assert result.total_unique == 4
+    assert out.exists()
+
+
+def test_merge_database_csv_files_adds_derived_metadata(tmp_path):
+    import csv
+
+    from novelty_filter import load_known_index_from_csvs, merge_database_csv_files
+
+    _merged_fixture(tmp_path)
+    result = merge_database_csv_files(datasets_dir=tmp_path)
+    with open(result.output_path, newline="", encoding="utf-8") as f:
+        rows = {r["formula"]: r for r in csv.DictReader(f)}
+
+    assert rows["NbAl2Cr"]["anonymous_formula"] == "ABC2"
+    assert rows["NbAl2Cr"]["elements"] == "Al Cr Nb"
+    assert rows["NbAl2Cr"]["num_elements"] == "3"
+
+    # the derived columns feed the element/anonymous novelty levels
+    index = load_known_index_from_csvs(csv_path=result.output_path)
+    assert frozenset({"Al", "Cr", "Nb"}) in index.element_combos
+    assert "ABC2" in index.anonymous
+
+
+def test_merge_database_csv_files_no_metadata_skips_derivation(tmp_path):
+    import csv
+
+    from novelty_filter import merge_database_csv_files
+
+    _merged_fixture(tmp_path)
+    result = merge_database_csv_files(datasets_dir=tmp_path, with_metadata=False)
+    with open(result.output_path, newline="", encoding="utf-8") as f:
+        rows = {r["formula"]: r for r in csv.DictReader(f)}
+
+    assert rows["NbAl2Cr"]["anonymous_formula"] == ""
+    assert rows["NbAl2Cr"]["elements"] == ""
+    assert rows["NbAl2Cr"]["databases"] == "cod;mp;oqmd"
+
+
+def test_comparison_key_flattens_polyatomic_groups():
+    from novelty_filter import comparison_key
+
+    assert comparison_key("Ac(AgAs)2") == "AcAg2As2"
+    assert comparison_key(" NbAl2Cr ") == "NbAl2Cr"   # already canonical
+    assert comparison_key("") is None
+    assert comparison_key("   ") is None
+
+
+def test_load_known_formulas_set_prefers_merged_csv(tmp_path):
+    from novelty_filter import load_known_formulas_set, merge_database_csv_files
+
+    _merged_fixture(tmp_path)
+    merge_database_csv_files(datasets_dir=tmp_path)
+    with open(tmp_path / "cod_formulas.csv", "a", encoding="utf-8") as f:
+        f.write("OnlyInFile\n")
+
+    formulas = load_known_formulas_set(datasets_dir=tmp_path)
+    assert {"AcAg2As2", "Fe2O3", "NbAl2Cr", "TiO2", "ZrO2"} <= formulas
+    assert "OnlyInFile" not in formulas            # merged CSV is read
+
+    per_db = load_known_formulas_set(datasets_dir=tmp_path, databases=["cod"])
+    assert "OnlyInFile" in per_db                  # --db uses the per-database file
+
+
+def test_load_known_formulas_set_reads_explicit_csv(tmp_path):
+    from novelty_filter import load_known_formulas_set
+
+    path = tmp_path / "known.csv"
+    path.write_text("formula,databases\nNbAl2Cr,cod;mp\nTiO2,mp\n", encoding="utf-8")
+
+    assert load_known_formulas_set(csv_path=path) == {"NbAl2Cr", "TiO2"}
+
+
+def test_load_known_formulas_set_missing_explicit_csv_raises(tmp_path):
+    from novelty_filter import load_known_formulas_set
+
+    with pytest.raises(FileNotFoundError):
+        load_known_formulas_set(csv_path=tmp_path / "does_not_exist.csv")
+
+
+def test_load_known_index_from_merged_csv_keeps_provenance(tmp_path):
+    from novelty_filter import load_known_index_from_csvs
+
+    path = tmp_path / "known.csv"
+    path.write_text(
+        "formula,databases\nNbAl2Cr,cod;mp\nAc(AgAs)2,cod\n", encoding="utf-8")
+    index = load_known_index_from_csvs(csv_path=path)
+
+    assert index.formula_in("NbAl2Cr") is True
+    assert index.formula_in("NbAl2Cr", database="cod") is True
+    assert index.formula_in("NbAl2Cr", database="oqmd") is False
+    assert index.formula_in("AcAg2As2", database="cod") is True   # flattened key
+    assert set(index.databases_containing("NbAl2Cr")) == {"cod", "mp"}
+
+
+def test_load_known_index_from_csvs_legacy_schema(tmp_path):
+    from novelty_filter import load_known_index_from_csvs
+
+    path = tmp_path / "legacy.csv"
+    path.write_text(
+        "formula,database,anonymous_formula,elements\n"
+        "NbAl2Cr,COD,ABC2,Al Cr Nb\n"
+        "TiO2,MP,AB2,O Ti\n",
+        encoding="utf-8",
+    )
+    index = load_known_index_from_csvs(csv_path=path)
+
+    assert index.formula_in("TiO2", database="mp") is True
+    assert index.formula_in("TiO2", database="cod") is False
+    assert "ABC2" in index.anonymous
+    assert frozenset({"Al", "Cr", "Nb"}) in index.element_combos
+
+
+def test_candidate_cli_filter_known_uses_merged_csv(tmp_path):
+    from argparse import Namespace
+
+    from candidate_cli import _load_known
+
+    path = tmp_path / "known.csv"
+    path.write_text("formula,databases\nNbAl2Cr,cod;mp\nTiO2,mp\n", encoding="utf-8")
+
+    known = _load_known(Namespace(known_csv=str(path), db=None))
+    assert known == {"NbAl2Cr", "TiO2"}

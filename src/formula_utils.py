@@ -10,6 +10,8 @@ integer ratio consistent (within tolerance) with the fractional input.
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 from pymatgen.core import Composition
 from pymatgen.core.periodic_table import Element
@@ -90,6 +92,100 @@ def safe_normalize_formula(formula: str) -> str | None:
         return normalize_formula(formula)
     except FormulaError:
         return None
+
+
+def flatten_formula(formula: str, max_denominator: int = 10000) -> str:
+    """Return the reduced formula as a plain, parenthesis-free string.
+
+    :func:`normalize_formula` preserves polyatomic groupings, so it renders
+    ``La4S3O3`` as ``La4(SO)3``. This expands such groupings into a flat
+    element-by-count string, omitting counts of 1::
+
+        flatten_formula("La4(SO)3")  -> "La4S3O3"
+        flatten_formula("Ti(PS3)2")  -> "TiP2S6"
+        flatten_formula("La2O3")     -> "La2O3"
+
+    Element order follows pymatgen's conventional chemical ordering (the order
+    used by :func:`normalize_formula`) rather than atomic number, so cations
+    are written before anions.
+
+    The result is canonical and notation-independent: any two formulas with the
+    same reduced composition flatten to the same string, which makes it a safe
+    comparison key as well as a display form.
+
+    Raises :class:`FormulaError` for unparseable input.
+    """
+    canonical = normalize_formula(formula, max_denominator=max_denominator)
+    amounts = _expand_groups(canonical)
+    if not amounts:
+        raise FormulaError(f"Formula contains no elements: {formula!r}")
+
+    parts = []
+    for symbol, amount in amounts.items():
+        count = int(round(float(amount)))
+        if count <= 0:
+            raise FormulaError(f"Non-positive amount for element {symbol} in {formula!r}")
+        parts.append(symbol if count == 1 else f"{symbol}{count}")
+    return "".join(parts)
+
+
+def safe_flatten_formula(formula: str) -> str | None:
+    """``flatten_formula`` that returns ``None`` instead of raising."""
+    try:
+        return flatten_formula(formula)
+    except FormulaError:
+        return None
+
+
+_ELEMENT_TOKEN = re.compile(r"([A-Z][a-z]?)(\d*\.?\d*)")
+
+
+def _expand_groups(text: str) -> dict[str, float]:
+    """Expand parenthesised groups in *text*, preserving first-appearance order.
+
+    Returns an ordered ``{element: amount}`` mapping. Handles nesting, e.g.
+    ``Ag(AuF4)2`` -> ``{'Ag': 1, 'Au': 2, 'F': 8}``.
+    """
+    result: dict[str, float] = {}
+    i = 0
+    n = len(text)
+
+    while i < n:
+        if text[i] == "(":
+            depth = 0
+            j = i
+            while j < n:
+                if text[j] == "(":
+                    depth += 1
+                elif text[j] == ")":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                j += 1
+            if depth != 0:
+                raise FormulaError(f"Unbalanced parentheses in formula: {text!r}")
+
+            inner = text[i + 1 : j]
+            k = j + 1
+            while k < n and (text[k].isdigit() or text[k] == "."):
+                k += 1
+            mult_str = text[j + 1 : k]
+            multiplier = float(mult_str) if mult_str else 1.0
+
+            for symbol, amount in _expand_groups(inner).items():
+                result[symbol] = result.get(symbol, 0.0) + amount * multiplier
+            i = k
+        else:
+            m = _ELEMENT_TOKEN.match(text, i)
+            if not m:
+                raise FormulaError(f"Could not parse formula fragment: {text[i:]!r}")
+            symbol = m.group(1)
+            count_str = m.group(2)
+            count = float(count_str) if count_str else 1.0
+            result[symbol] = result.get(symbol, 0.0) + count
+            i = m.end()
+
+    return result
 
 
 def get_anonymous_formula(formula: str) -> str:

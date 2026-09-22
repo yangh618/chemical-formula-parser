@@ -1,0 +1,597 @@
+% =============================================================================
+%  Candidate chemical-formula generation for three material systems
+%  Methodology, datasets, filtering and diversity report
+%
+%  Compile with:  pdflatex CANDIDATE_GENERATION_REPORT.tex   (twice for refs)
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.6cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage[detect-all]{siunitx}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,citecolor=blue!60!black,
+            urlcolor=blue!60!black]{hyperref}
+
+\captionsetup[table]{skip=4pt,font=small,labelfont=bf}
+\setlist{nosep}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+\setlength{\tabcolsep}{4pt}
+\emergencystretch=1.5em
+
+\newcommand{\pkg}[1]{\texttt{#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\cmd}[1]{\texttt{\small #1}}
+
+\title{\textbf{Candidate Chemical-Formula Generation for Three Material Systems}\\[4pt]
+       \large Methodology, reference datasets, novelty filtering and diversity selection}
+\author{CrystalFNO discovery pipeline\\
+        \small\texttt{crystalfno-discovery} (\code{Chemical-Formula-Parser})}
+\date{21 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+We describe the pipeline used to generate 1000 candidate chemical formulas for each of three
+composition spaces --- oxychalcogenides, phosphorus chalcogenides and double perovskites.
+Candidates are produced by an exact, deterministic enumeration of charge-balanced integer
+stoichiometries over a \code{config.yaml}-declared element universe, screened for chemical
+plausibility with SMACT~4.0.0 (charge neutrality under the ICSD-2024 oxidation-state set plus
+the Pauling electronegativity test), filtered against the union of the Crystallography Open
+Database, the Materials Project and the Open Quantum Materials Database
+(3{,}597{,}064 unique known reduced formulas), and reduced to a maximally spread-out subset by
+greedy farthest-point (max--min dispersion) sampling over a combined stoichiometric and
+element-identity distance. All reported numbers are measured from the delivered runs. The three
+novelty-filtered outputs contain 1000 formulas each, with zero duplicates, zero parenthesised
+groups, zero SMACT-invalid compositions and zero overlap with the reference databases.
+\end{abstract}
+
+\tableofcontents
+\vspace{2em}
+
+% =============================================================================
+\section{Summary}
+% =============================================================================
+
+For each composition space the pipeline has four stages:
+
+\begin{enumerate}[label=(\arabic*)]
+  \item \textbf{Enumerate} charge-balanced compositions from the config-declared element universe
+        (cation set $\times$ anion set $\times$ integer stoichiometry), stratified so that no
+        single element combination dominates the pool.
+  \item \textbf{Screen} every candidate with SMACT~\cite{smact_joss,smact_chem}
+        (\code{smact.screening.smact\_validity}): charge neutrality under an oxidation-state set
+        \emph{and} the Pauling electronegativity rule~\cite{pauling}.
+  \item \textbf{Filter} out any formula whose canonical reduced form already occurs in
+        COD~\cite{cod}, MP~\cite{mp_apl,mp_api} or OQMD~\cite{oqmd}.
+  \item \textbf{Select} a maximally spread-out subset of the survivors with greedy farthest-point
+        sampling~\cite{gonzalez} over a combined L2 / Jaccard~\cite{jaccard} distance.
+\end{enumerate}
+
+Output is written one formula per line in flat, parenthesis-free notation
+(\code{La4S3O3}, not \code{La4(SO)3}).
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+System & Pool & SMACT rej. & Known in DBs & Novel & Elem.\ sets & Min $d$\\
+\midrule
+Oxychalcogenides         & 14{,}975 &  0 (0.0\,\%) &   830 (5.5\,\%) & 14{,}145 & 1{,}000 & 0.5354\\
+Phosphorus chalcogenides &  6{,}768 & 36 (0.5\,\%) &    81 (1.2\,\%) &  6{,}651 &   898   & 0.2720\\
+Double perovskites       & 11{,}019 &  0 (0.0\,\%) & 2{,}088 (18.9\,\%) & 8{,}931 & 1{,}000 & 0.4905\\
+\bottomrule
+\end{tabular}
+\caption{Statistics of the three delivered runs ($n=1000$, novelty filter on, diversity selection on).
+``Min $d$'' is the minimum pairwise distance of the delivered selection.}
+\label{tab:runs}
+\end{table}
+
+Verification performed on the six output files: 1000 lines each; 0 parenthesised groups;
+0 duplicate formulas; 0 formulas failing the SMACT validity test; and, for the three
+\code{novel\_1000.txt} files, 0 canonical forms present in the 3{,}597{,}064 known formulas.
+The three \code{candidates\_1000.txt} comparison sets are diversity-selected but deliberately
+\emph{not} novelty-filtered, so they do contain known formulas (70, 16 and 115 respectively).
+
+% =============================================================================
+\section{The three composition spaces}
+% =============================================================================
+
+The chemistry of each system is declared entirely in \code{config.yaml} under
+\code{composition\_spaces}; no element list is hard-coded in Python. Every space specifies a
+cation pool, an anion pool, per-element oxidation states used for charge balancing, and
+enumeration constraints (Table~\ref{tab:spaces}).
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}p{3.5cm} p{4.9cm} p{2.0cm} p{3.4cm}@{}}
+\toprule
+Space & Cations & Anions & Constraints\\
+\midrule
+\code{oxychalcogenides} &
+La, Ce, Pr, Nd, Sm, Eu, Gd, Ti, V, Cr, Mn, Fe, Co, Ni (14) &
+O, S, Se, Te; O required &
+max\_stoich 8, max\_total\_atoms 20, max\_cation\_species 3, per\_combo\_limit 4\\
+\addlinespace
+\code{phosphorus\_\allowbreak chalcogenides} &
+Ti, V, Cr, Mn, Fe, Co, Ni, Cu (8) &
+P, S, Se, Te; P required &
+max\_stoich 8, max\_total\_atoms 20, max\_cation\_species 4, per\_combo\_limit 6\\
+\addlinespace
+\code{double\_perovskites} &
+La, Nd, Sm, Eu, Gd, Ca, Sr, Ba, Ti, V, Cr, Mn, Fe, Co, Ni, Cu, Nb, Mo, W (19) &
+O &
+max\_stoich 6, max\_total\_atoms 10, max\_cation\_species 4, per\_combo\_limit 6\\
+\bottomrule
+\end{tabular}
+\caption{Composition spaces as declared in \code{config.yaml}.}
+\label{tab:spaces}
+\end{table}
+
+Chemical rationale for the caps: rare-earth/transition-metal oxychalcogenides (photocatalysis,
+thermoelectrics, ion storage) are mostly reported with at most three distinct cation species;
+layered transition-metal phosphorus chalcogenides (e.g.\ \code{TiPS3}, \code{FeCoPS}) are
+one-to-four cation systems; and the $A_2BB'\mathrm{O}_6$ double-perovskite motif contains at most
+four distinct cation species and at most ten atoms per formula unit.
+
+\code{max\_cation\_species} matters for tractability as well as chemistry: without it the
+double-perovskite space walks all $2^{19}$ cation subsets and one run took \SI{272}{s}; capped at
+four the same run takes \SI{5}{s}.
+
+% =============================================================================
+\section{Candidate generation algorithm}
+% =============================================================================
+
+Implementation: \pkg{src/composition.py} (\code{CompositionSpace},
+\code{generate\_charge\_balanced\_\allowbreak stoichiometries},
+\code{check\_charge\_balance}).
+
+For each pair (cation subset $C$, anion subset $A$) satisfying
+\[
+\begin{aligned}
+  &\text{min\_cations} \le |C| \le \text{max\_cation\_species},\\
+  &\text{min\_anions} \le |A| \le \text{max\_anion\_species},\\
+  &\text{required\_anions} \subseteq A,
+\end{aligned}
+\]
+the pipeline performs the following steps:
+
+\begin{enumerate}[label=\arabic*.]
+  \item Enumerate integer stoichiometry vectors over $C \cup A$ with each coefficient between
+        $1$ and \code{max\_stoich} and total atom count at most \code{max\_total\_atoms}. A work
+        budget (\code{max\_scan}, default 20{,}000 vectors per combination) bounds the cost of
+        large combinations.
+  \item For each vector, test whether an assignment of oxidation states --- taken from the
+        per-element lists in \code{config.yaml} --- makes the composition exactly charge neutral.
+        Only vectors admitting such an assignment survive.
+  \item Canonicalise the surviving composition with \code{formula\_utils.normalize\_formula}
+        (pymatgen~\cite{pymatgen} \code{Composition.get\_reduced\_formula} semantics) and
+        deduplicate, so that \code{AlCrNb2} and \code{Nb2CrAl} collapse to one entry.
+  \item Keep at most \code{per\_combo\_limit} formulas per $(C,A)$ combination (stratification,
+        Section~\ref{sec:strat}) and stop at \code{max\_results} overall.
+\end{enumerate}
+
+The enumeration is exact and deterministic: it neither samples randomly nor depends on dictionary
+ordering, so re-running a script reproduces byte-identical output.
+
+% =============================================================================
+\section{Chemical-plausibility screening with SMACT}
+% =============================================================================
+
+Library: SMACT (\emph{Semiconducting Materials by Analogy and Chemical Theory}), version 4.0.0
+\cite{smact_joss,smact_chem}. Wrapper: \pkg{src/smactlib/filters.py}; CLI wiring:
+\pkg{src/candidate\_cli.py} (\code{\_smact\_validator}, \code{\_screen}).
+
+Every enumerated candidate is passed through
+\begin{verbatim}
+    smact.screening.smact_validity(formula,
+                                   use_pauling_test=True,
+                                   include_alloys=True,
+                                   oxidation_states_set="icsd24")
+\end{verbatim}
+so a candidate is kept only if SMACT can find an oxidation-state assignment, drawn from the
+ICSD-derived 2024 oxidation-state table shipped with SMACT, that
+\begin{enumerate}[label=(\alph*)]
+  \item sums to zero charge for the given stoichiometry, and
+  \item obeys Pauling's electronegativity rule~\cite{pauling}: negative oxidation states are
+        assigned only to the more electronegative elements of the composition.
+\end{enumerate}
+All-metallic compositions are auto-accepted as alloys (\code{include\_alloys=True}), which is
+SMACT's convention for intermetallics where integer charge balancing is not meaningful.
+
+Because the \code{config.yaml} enumeration already enforces charge neutrality with its own
+oxidation-state lists, SMACT acts here mainly as an independent cross-check that additionally
+imposes the electronegativity constraint. The measured rejection rates confirm that the two are
+largely consistent:
+\[
+  \text{oxychalcogenides } \frac{0}{14{,}975}, \qquad
+  \text{P-chalcogenides } \frac{36}{6{,}768}\ (0.5\%), \qquad
+  \text{double perovskites } \frac{0}{11{,}019}.
+\]
+
+The 36 rejected phosphorus-chalcogenide candidates are Te-rich compositions such as
+\code{TiTe4P}, \code{VTe5P}, \code{CrTe7P2} and \code{Cr(Te4P)2}. Pauling electronegativities put
+P (2.19) marginally above Te (2.10), so the only charge-balancing assignment for these formulas
+requires Te to carry the negative state and P the positive one, which the Pauling test forbids.
+Screening costs \SI{0.8}{ms} per formula and is applied to the whole pool, i.e.\ a few seconds
+per run. It is on by default and can be retuned from the command line: \cmd{--no-smact},
+\cmd{--smact-ox-set \{icsd24,icsd16,smact14,pymatgen\_sp,wiki\}}, \cmd{--smact-no-en}.
+
+\subsection*{SMACT as an independent generator (complementary path)}
+
+\pkg{src/smactlib/generator.py} also implements full SMACT-driven candidate generation: for every
+element combination of the requested size it calls \code{smact.neutral\_ratios} over the SMACT
+oxidation-state sets, optionally applying \code{smact.screening.pauling\_test}, and enumerates
+integer stoichiometry vectors for all-metal (alloy) combinations. That path is driven by
+\cmd{scripts/generate\_formulas.py} (which writes \code{data/formulas/candidates.csv} with
+per-candidate SMACT flags) and screened for novelty by \cmd{scripts/find\_novel\_formulas.py}.
+It searches an arbitrary element universe rather than a cation/anion-structured space, and is
+therefore complementary to the three system-specific pipelines. The 3{,}000 delivered formulas
+were produced by the config-driven enumerator of Section~3 and validated by the SMACT screen
+described above.
+
+% =============================================================================
+\section{Reference datasets used for novelty filtering}
+% =============================================================================
+
+Three databases were used, each mirrored locally under \code{\textasciitilde/Git/<name>-Dataset}
+and reduced to a list of unique canonical formulas in \code{datasets/} by
+\cmd{scripts/extract\_database\_formulas.py}. That extraction is run once; the CSVs are the
+reusable artefact, and \code{datasets/} is intentionally \code{.gitignore}d because of its size.
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}l p{7.4cm} r r@{}}
+\toprule
+Database & Source snapshot & Unique formulas & Size\\
+\midrule
+COD~\cite{cod} & rsync mirror of \code{crystallography.net/cif} (experimental crystal structures) & 399{,}556 & \SI{6.4}{MB}\\
+MP~\cite{mp_apl,mp_api} & \code{data/mp\_summary.csv} via the Materials Project API (DFT-computed entries) & 104{,}734 & \SI{1.1}{MB}\\
+OQMD~\cite{oqmd} & SQL dump \code{qmdb\_v1\_8}, release 2026-01-29, \code{compositions} table (DFT-computed entries) & 3{,}215{,}729 & \SI{35.4}{MB}\\
+\midrule
+ & Sum & 3{,}720{,}019 & \\
+ & Union (deduplicated) & 3{,}597{,}064 & \\
+\bottomrule
+\end{tabular}
+\caption{Reference databases and the extracted known-formula sets.}
+\label{tab:datasets}
+\end{table}
+
+Cross-database overlap within the union: COD $\cap$ MP $= 25{,}971$; COD $\cap$ OQMD $= 47{,}141$;
+MP $\cap$ OQMD $= 75{,}399$; present in all three $= 25{,}556$. Hence 122{,}955 formulas are
+shared by at least two databases and the union is $3.3\,\%$ smaller than the sum.
+
+Composition of the union by number of distinct elements: 1 element, 104; 2 elements, 185{,}555;
+3 elements, 842{,}541; 4 elements, 1{,}973{,}133; 5 elements, 395{,}768; 6 elements, 128{,}402;
+7 or more, $\approx$71{,}000.
+
+Extraction details worth recording:
+\begin{itemize}
+  \item Every formula is re-canonicalised with \code{normalize\_formula} before being written, so
+        the three CSVs share one notation and plain string comparison is a valid novelty test.
+        Canonicalisation was verified to be notation- and element-order-independent (200 random
+        element-order permutations per sample formula, 0 inconsistencies).
+  \item COD formulas come from parsing the CIF mirror, MP from the summary CSV, and OQMD from the
+        SQL dump. The OQMD dump packs many rows into a single \code{INSERT} statement, so
+        extraction matches every \code{('formula',} tuple on \code{compositions} lines rather than
+        only the first one per line; an early version that matched only the first recovered 181
+        formulas instead of 3.2\,M.
+  \item A small number of OQMD rows use placeholder site labels instead of element symbols. These
+        fail element parsing and are dropped. In the unlikely case that a placeholder-only row used
+        real element symbols it would survive as a spurious ``known'' entry; that can only cause
+        false negatives (a genuinely novel formula reported as known), never false positives, and
+        no such case was observed for the three heavy-cation systems studied here.
+\end{itemize}
+
+\noindent Regenerate the CSVs with:
+\begin{verbatim}
+    conda run -n chem python scripts/extract_database_formulas.py
+    conda run -n chem python scripts/extract_database_formulas.py --db cod mp
+\end{verbatim}
+
+% =============================================================================
+\section{How novelty filtering is done}
+% =============================================================================
+
+Implementation: \pkg{src/novelty\_filter.py} (\code{load\_known\_\allowbreak formulas\_set},
+\code{generate\_novel\_\allowbreak candidates}, \code{NovelGenerationResult}).
+
+\begin{enumerate}[label=\arabic*.]
+  \item Load the union of the selected CSVs into a Python \code{set} of canonical strings
+        (\cmd{--db cod mp oqmd} selects a subset; the default is all three). Loading 3{,}597{,}064
+        formulas takes a few seconds and dominates runtime.
+  \item Canonicalise each generated candidate with \code{normalize\_formula} and test set
+        membership. A candidate is \emph{novel} if and only if its exact reduced formula is absent
+        from every selected database.
+  \item In enumeration-order mode the generation limit is scaled adaptively ($\times 4$ per round,
+        capped at 2{,}000{,}000) until the requested number of novel formulas is found, the
+        composition space is exhausted, or the cap is hit. The result object reports
+        \code{total\_generated}, \code{rejected\_by\_validator}, \code{known\_filtered},
+        \code{novel\_found}, \code{space\_exhausted} and \code{target\_met}, so statistics are
+        never inferred from a truncated list.
+\end{enumerate}
+
+Novelty rates observed at pool level (fraction of charge-balanced, SMACT-valid candidates that no
+database contains) are given in Table~\ref{tab:runs}: $94.5\,\%$ for oxychalcogenides, $98.8\,\%$
+for phosphorus chalcogenides and $81.1\,\%$ for double perovskites. The lower double-perovskite
+rate is expected --- oxide perovskite compositions are the most heavily mined region of all three
+databases.
+
+\textbf{Scope.} ``Novel'' here means \emph{database-unseen at the level of the reduced chemical
+formula}. It is not a claim of thermodynamic stability, synthesizability, or that the material has
+never been made. The comparison is also composition-level only: two polymorphs of the same
+composition count as one known formula.
+
+% =============================================================================
+\section{How diversity is achieved}
+% =============================================================================
+
+Diversity is produced by two cooperating mechanisms: stratified enumeration, which makes the pool
+broad, and farthest-point selection, which makes the delivered subset spread out.
+
+\subsection{Stratified enumeration (pool construction)}
+\label{sec:strat}
+
+Raw enumeration exhausts every stoichiometry of one element combination before moving to the next,
+and iterates cation subsets by increasing size, so the head of an unstratified list is dominated by
+a handful of species: in the first oxychalcogenide runs the first 1000 formulas spanned only 15
+distinct element sets and were nearly all single-cation La systems. \code{per\_combo\_limit} caps
+how many formulas any single (cation-set, anion-set) combination contributes (4 for
+oxychalcogenides, 6 for the other two systems), spreading the pool across the whole combination
+space.
+
+\subsection{Distance metric}
+
+Implementation: \pkg{src/diversity.py}. Each formula is mapped to two 118-dimensional vectors over
+the periodic table: $\mathbf{f}$, the elemental mole fractions (summing to 1), and $\mathbf{p}$,
+the binary element-presence indicator. The distance between two formulas is
+\begin{equation}
+  d(i,j) \;=\; w_{\text{comp}}\,\bigl\lVert \mathbf{f}_i - \mathbf{f}_j \bigr\rVert_2
+           \;+\; w_{\text{set}}\,\Bigl(1 - J(S_i,S_j)\Bigr),
+  \qquad
+  J(S_i,S_j) = \frac{|S_i \cap S_j|}{|S_i \cup S_j|},
+  \label{eq:distance}
+\end{equation}
+with $J$ the Jaccard index~\cite{jaccard} on element sets. The first term separates
+stoichiometries; the second separates chemical identity, so two formulas sharing no elements are
+pushed apart even when their fraction vectors look similar. Both weights default to 1.0 and are
+exposed as \cmd{--w-composition} and \cmd{--w-element-set} (e.g.\ \cmd{--w-element-set 3}
+emphasises distinct species over distinct stoichiometry).
+
+\subsection{Selection algorithm: greedy farthest-point sampling}
+
+\code{select\_diverse(pool, n\_select)} implements max--min dispersion~\cite{gonzalez}:
+\begin{itemize}
+  \item deduplicate the pool and seed with the candidate farthest from the pool centroid (a
+        deterministic, representative starting point);
+  \item maintain $m_i = \min_{s \in \text{selected}} d(i,s)$ for every pool member $i$;
+  \item repeatedly select $\arg\max_i m_i$ and update
+        $\mathbf{m} \leftarrow \min\bigl(\mathbf{m},\, d(\cdot, i^\ast)\bigr)$, marking selected
+        entries as $-\infty$.
+\end{itemize}
+This is Gonzalez's 2-approximation for the max--min dispersion ($p$-center) objective~\cite{gonzalez}:
+the smallest pairwise distance in the returned set is at least half of the best achievable for that
+set size. Vectorised with NumPy it costs $O(|\text{pool}| \times n_{\text{select}})$ distance
+evaluations --- reducing a 15{,}000-member pool to 1000 formulas takes a few seconds. The result is
+deterministic and reproducible.
+
+\subsection{Measured effect}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & Baseline A & Baseline B & Delivered\\
+ & no stratification, & stratified, & stratified $+$ FPS\\
+ & enumeration order & enumeration order & $+$ novelty filter\\
+\midrule
+Oxychalcogenides: distinct sets &   15 &  258 & 1{,}000\\
+\quad min pairwise distance     & 0.0157 & 0.0288 & 0.5354\\
+\quad mean pairwise distance    & ---    & 1.2574 & 1.2975\\
+\addlinespace
+P-chalcogenides: distinct sets  &    7 &  167 &   898\\
+\quad min pairwise distance     & 0.0157 & 0.0315 & 0.2720\\
+\quad mean pairwise distance    & ---    & 1.1824 & 1.1616\\
+\addlinespace
+Double perovskites: distinct sets &  155 &  228 & 1{,}000\\
+\quad min pairwise distance     & 0.0354 & 0.0354 & 0.4905\\
+\quad mean pairwise distance    & ---    & 1.1544 & 1.0689\\
+\bottomrule
+\end{tabular}
+\caption{Diversity of 1000-formula outputs. Baseline~A was measured on the pre-stratification
+pipeline; Baseline~B is reproducible today with \cmd{--no-diverse}; ``Delivered'' is the content of
+the \code{novel\_1000.txt} files.}
+\label{tab:diversity}
+\end{table}
+
+Element coverage is complete in all delivered sets (18, 12 and 20 elements respectively --- every
+element of the space appears), and the largest group of formulas sharing one element set drops from
+4--6 to 1--3. Phosphorus chalcogenides reach 898 rather than 1000 distinct element sets because the
+space contains only 12 elements with P mandatory, so fewer than 1000 distinct sets are reachable at
+this size.
+
+\textbf{Honest caveat.} Max--min dispersion optimises the \emph{minimum} pairwise distance, not the
+mean. The mean can therefore fall slightly when the selection is forced to fill in isolated
+regions: for double perovskites it went from 1.1544 (Baseline~B) to 1.0689 (delivered) while the
+minimum rose from 0.0354 to 0.4905 and distinct element sets rose from 228 to 1000. If average
+separation is the target instead, \cmd{--no-diverse} with a larger pool, or a max--sum objective,
+would be the right tool.
+
+% =============================================================================
+\section{Output notation}
+% =============================================================================
+
+\code{formula\_utils.flatten\_formula} expands parenthesised groups and re-emits the reduced
+composition with integer counts, keeping pymatgen's~\cite{pymatgen} conventional
+electronegativity-based element order (cation before anion): \code{La4(SO)3} becomes
+\code{La4S3O3}, \code{Ti(PS3)2} becomes \code{TiP2S6}. Unit counts are omitted
+(\code{LaTiSO2}, not \code{La1Ti1S1O2}). Flattening is notation-independent, idempotent and
+round-trips to the same canonical form as \code{normalize\_formula} (covered by tests in
+\pkg{tests/test\_formula\_utils.py}), so flat output can still be matched against the parenthesised
+database CSVs by canonicalising both sides --- which is exactly how the zero-overlap verification
+in Section~1 was performed.
+
+% =============================================================================
+\section{Reproducibility}
+% =============================================================================
+
+Each system has its own script; all share \pkg{src/candidate\_cli.py}.
+
+{\footnotesize
+\begin{verbatim}
+    conda run -n chem python examples/oxychalcogenides/generate_candidates.py \
+        -n 1000 --filter-known -o examples/oxychalcogenides/novel_1000.txt
+
+    conda run -n chem python examples/phosphorus_chalcogenides/generate_candidates.py \
+        -n 1000 --filter-known -o examples/phosphorus_chalcogenides/novel_1000.txt
+
+    conda run -n chem python examples/double_perovskites/generate_candidates.py \
+        -n 1000 --filter-known -o examples/double_perovskites/novel_1000.txt
+\end{verbatim}
+\par}
+
+{\sloppy
+The comparison sets drop \cmd{--filter-known} and write
+\code{candidates\_\allowbreak 1000.txt}.
+\cmd{examples/\allowbreak generate\_candidates.py} runs all three spaces in one go, inserting the
+space name into the output filename.
+
+\textbf{Flags.} \cmd{-n/--num}, \cmd{-o/--output}, \cmd{--filter-known}, \cmd{--db cod mp oqmd},
+\cmd{--no-diverse}, \cmd{--pool}, \cmd{--per-combo}, \cmd{--max-cations}, \cmd{--max-anions},
+\cmd{--w-composition}, \cmd{--w-element-set}, \cmd{--no-smact}, \cmd{--smact-ox-set},
+\cmd{--smact-no-en}.
+\par}
+
+\textbf{Cost.} A full 1000-formula run (pool construction $+$ SMACT screen $+$ loading the
+3.6\,M-formula known index $+$ FPS selection) takes \SI{17}{s} wall clock; without
+\cmd{--filter-known} it is a few seconds. Output is deterministic.
+
+\textbf{Tests.} \cmd{conda run -n chem python -m pytest -q} collects 100 tests, all passing,
+covering formula canonicalisation and flattening, charge-balance enumeration, the novelty and
+validator hooks, SMACT filtering and the diversity selector.
+
+% =============================================================================
+\section{Limitations and scientific safeguards}
+% =============================================================================
+
+\begin{itemize}
+  \item Charge neutrality plus the Pauling electronegativity rule are \emph{necessary}, not
+        sufficient, conditions for a real compound. They screen out impossible stoichiometries; they
+        say nothing about thermodynamic stability, synthesis conditions or whether a phase can be
+        isolated. No DFT or machine-learning stability prediction (e.g.\ formation energy above the
+        convex hull) is applied at this stage.
+  \item ``Novel'' means unseen in COD, MP and OQMD at the reduced-formula level. Absence from these
+        databases is evidence of interest, not evidence of non-existence: the databases are
+        incomplete, and unpublished or very recent compounds will be counted as novel.
+  \item Oxidation states are taken from \code{config.yaml} for enumeration and from SMACT's
+        \code{icsd24} set for screening. Systems with unusual or mixed-valence chemistry may need a
+        different set (\cmd{--smact-ox-set}) or a config edit.
+  \item Diversity is measured in composition space only. Structurally distinct polymorphs of one
+        composition are a single point; conversely, two compositions far apart in metric
+        \eqref{eq:distance} may still be structurally related.
+  \item Per-combination work budgets (\code{max\_scan}) and species caps
+        (\code{max\_cation\_species}) mean the pool is a large, stratified sample of the space
+        rather than a proof of exhaustive coverage.
+\end{itemize}
+
+% =============================================================================
+\section*{Software availability}
+% =============================================================================
+
+Pipeline code: \code{crystalfno-discovery} at
+\code{/home/huangyang/Git/Chemical-Formula-Parser} (modules \pkg{composition}, \pkg{diversity},
+\pkg{novelty\_filter}, \pkg{formula\_utils}, \pkg{candidate\_cli}, \pkg{smactlib}).
+Environment: conda env \code{chem} with SMACT~4.0.0, pymatgen, NumPy, SciPy, pandas, PyYAML.
+Reference-database extracts: \code{datasets/\{cod,mp,oqmd\}\_formulas.csv}, regenerated by
+\cmd{scripts/extract\_database\_formulas.py}.
+
+% =============================================================================
+\begin{thebibliography}{10}
+\providecommand{\doi}[1]{doi:~\href{https://doi.org/#1}{\nolinkurl{#1}}}
+
+\bibitem{cod}
+S.~Gra\v{z}ulis, D.~Chateigner, R.~T.~Downs, A.~F.~T.~Yokochi, M.~Qui\'{r}os, L.~Lutterotti,
+E.~Manakova, J.~Butkus, P.~Moeck, and A.~Le~Bail.
+\newblock Crystallography Open Database --- an open-access collection of crystal structures.
+\newblock \emph{Journal of Applied Crystallography}, 42(4):726--729, 2009.
+\newblock \doi{10.1107/S0021889809016690}
+
+\bibitem{mp_apl}
+A.~Jain, S.~P.~Ong, G.~Hautier, W.~Chen, W.~D.~Richards, S.~Dacek, S.~Cholia, D.~Gunter,
+D.~Skinner, G.~Ceder, and K.~A.~Persson.
+\newblock Commentary: The Materials Project: A materials genome approach to accelerating materials
+innovation.
+\newblock \emph{APL Materials}, 1(1):011002, 2013.
+\newblock \doi{10.1063/1.4812323}
+
+\bibitem{mp_api}
+Materials Project.
+\newblock Data accessed via the MP API; local snapshot \code{mp\_summary.csv}
+(\code{\textasciitilde/Git/MP-Dataset}).
+
+\bibitem{oqmd}
+S.~Kirklin, J.~E.~Saal, B.~Meredig, A.~Thompson, J.~W.~Doak, M.~Aykol, S.~R\"{u}hl, and
+C.~Wolverton.
+\newblock The Open Quantum Materials Database (OQMD): assessing the accuracy of DFT formation
+energies.
+\newblock \emph{npj Computational Materials}, 1:15010, 2015.
+\newblock \doi{10.1038/npjcompumats.2015.10}
+\newblock Snapshot used: QMDB v1.8 SQL dump, release 2026-01-29.
+
+\bibitem{smact_joss}
+D.~W.~Davies, K.~T.~Butler, A.~J.~Jackson, J.~M.~Skelton, K.~Morita, and A.~Walsh.
+\newblock SMACT: Semiconducting Materials by Analogy and Chemical Theory.
+\newblock \emph{Journal of Open Source Software}, 4(38):1361, 2019.
+\newblock \doi{10.21105/joss.01361}
+\newblock Version used: 4.0.0.
+
+\bibitem{smact_chem}
+D.~W.~Davies, K.~T.~Butler, A.~J.~Jackson, A.~Morris, J.~M.~Frost, J.~M.~Skelton, and A.~Walsh.
+\newblock Computational Screening of All Stoichiometric Inorganic Materials.
+\newblock \emph{Chem}, 1(4):617--627, 2016.
+\newblock \doi{10.1016/j.chempr.2016.09.010}
+
+\bibitem{pauling}
+L.~Pauling.
+\newblock \emph{The Nature of the Chemical Bond}.
+\newblock Cornell University Press, Ithaca, NY, 3rd edition, 1960.
+\newblock Electronegativity criterion implemented by \code{smact.screening.pauling\_test}.
+
+\bibitem{gonzalez}
+T.~F.~Gonzalez.
+\newblock Clustering to minimize the maximum intercluster distance.
+\newblock \emph{Theoretical Computer Science}, 38:293--306, 1985.
+\newblock \doi{10.1016/0304-3975(85)90224-5}
+\newblock Greedy farthest-point sampling; 2-approximation for max--min dispersion.
+
+\bibitem{jaccard}
+P.~Jaccard.
+\newblock The distribution of the flora in the alpine zone.
+\newblock \emph{New Phytologist}, 11(2):37--50, 1912.
+\newblock \doi{10.1111/j.1469-8137.1912.tb05611.x}
+
+\bibitem{pymatgen}
+S.~P.~Ong, W.~D.~Richards, A.~Jain, G.~Hautier, M.~Kocher, S.~Cholia, D.~Gunter, V.~L.~Chevrier,
+K.~A.~Persson, and G.~Ceder.
+\newblock Python Materials Genomics (pymatgen): A robust, open-source python library for materials
+analysis.
+\newblock \emph{Computational Materials Science}, 68:314--319, 2013.
+\newblock \doi{10.1016/j.commatsci.2012.10.028}
+\newblock Used for formula parsing, reduction and conventional element ordering.
+
+\end{thebibliography}
+
+\end{document}

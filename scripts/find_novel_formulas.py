@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Screen SMACT candidates against the known-formula database for novelty.
 
-Inputs: a candidates CSV (from generate_formulas.py) + the union
-known_formulas.csv (from build_known_formula_database.py). Output:
-``data/formulas/novel_formulas.csv``.
+Inputs: a candidates CSV (from generate_formulas.py) + a known-formulas CSV.
+The known file may be either
+
+* the merged, de-duplicated ``datasets/known_formulas.csv`` (columns
+  ``formula, databases``), as built by ``scripts/merge_known_formulas.py``, or
+* the per-database schema (``formula, database [, anonymous_formula, elements]``).
+
+Output: ``data/formulas/novel_formulas.csv``.
 
 Each output row carries the SMACT filter flags from the candidates file plus
 membership/novelty flags. The most important field is ``novel_exact_formula``
@@ -17,6 +22,7 @@ candidate compositions*, not new materials or stable phases (section 29).
 Examples
 --------
 python scripts/find_novel_formulas.py
+python scripts/find_novel_formulas.py --known datasets/known_formulas.csv
 python scripts/find_novel_formulas.py --novel-only
 """
 
@@ -34,10 +40,10 @@ from config import get_project_root  # noqa: E402
 from novelty import (  # noqa: E402
     KnownIndex,
     annotate,
-    build_known_index,
     canonicalize_formula,
     nearest_known_distance,
 )
+from novelty_filter import load_known_index_from_csvs, merged_csv_path  # noqa: E402
 
 ROOT = get_project_root()
 
@@ -53,7 +59,11 @@ _OUTPUT_COLUMNS = [
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Novelty screening of SMACT candidates.")
     parser.add_argument("--candidates", default="data/formulas/candidates.csv")
-    parser.add_argument("--known", default="data/formulas/known_formulas.csv")
+    parser.add_argument("--known", default="data/formulas/known_formulas.csv",
+                        help="known-formulas CSV: either the merged "
+                             "datasets/known_formulas.csv (one unique formula per "
+                             "row) or a per-database file "
+                             "(formula, database [, anonymous_formula, elements])")
     parser.add_argument("--out", default="data/formulas/novel_formulas.csv")
     parser.add_argument("--novel-only", action="store_true",
                         help="only write rows where novel_exact_formula is True")
@@ -69,16 +79,24 @@ def main(argv=None) -> int:
         logger.error("Candidates file missing: %s (run generate_formulas.py first)", candidates_path)
         return 1
 
+    if not known_path.exists() and args.known == parser.get_default("known"):
+        # Fall back to the merged unique-formula CSV built by merge_known_formulas.py.
+        merged = merged_csv_path()
+        if merged.exists():
+            logger.info("Default known file missing; using merged CSV %s", merged)
+            known_path = merged
+
     candidates_df = du.load_metadata_csv(candidates_path)
-    known_df = du.load_metadata_csv(known_path)
     index: KnownIndex
-    if known_df.empty:
-        logger.warning("Known-formula database empty/missing -> all candidates treated as unseen.")
+    if known_path.exists():
+        index = load_known_index_from_csvs(csv_path=known_path)
+        logger.info("Loaded %d unique known formulas from %s.",
+                    len(index.all_formulas), known_path)
+    else:
+        logger.warning("Known-formula file missing (%s) -> all candidates treated as unseen.",
+                       known_path)
         index = KnownIndex()
         index.finalize()
-    else:
-        index = build_known_index(known_df)
-        logger.info("Loaded %d unique known formulas across databases.", len(index.all_formulas))
 
     rows = []
     for _i, rec in candidates_df.iterrows():

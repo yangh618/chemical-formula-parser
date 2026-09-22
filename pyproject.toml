@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "External validation and novel-composition discovery pipeline around a frozen CrystalFNO model."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "BSD-3-Clause" }
+license = "BSD-3-Clause"
 authors = [{ name = "CrystalFNO development" }]
 keywords = ["materials", "crystals", "structure-prediction", "SMACT", "OPTIMADE"]
 classifiers = [
@@ -35,8 +35,8 @@ dependencies = [
 test = ["pytest>=7.4"]
 
 [tool.setuptools]
-packages = ["databases", "novelty", "smactlib", "validation", "search_spaces"]
-py-modules = ["common", "config", "database_utils", "formula_utils", "structure_utils"]
+packages = ["novelty", "smactlib", "validation"]
+py-modules = ["candidate_cli", "common", "composition", "config", "database_utils", "diversity", "formula_utils", "novelty_filter", "structure_utils"]
 
 [tool.setuptools.package-dir]
 "" = "src"

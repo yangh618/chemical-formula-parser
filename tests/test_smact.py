@@ -45,3 +45,30 @@ def test_filters():
     # Invalid element -> filter fails safely.
     assert f.smact_valid("FeX2", oxidation_set="icsd24") is False
     assert f.oxidation_states_available(["NotARealElem"]) is False
+
+
+def test_screen_formulas_keeps_only_valid():
+    kept = f.screen_formulas(["NaCl", "Al2O3", "FeX2", "NotARealElem2"])
+    assert kept == ["NaCl", "Al2O3"]
+
+
+def test_screen_formulas_preserves_order_and_duplicates():
+    kept = f.screen_formulas(["Al2O3", "NaCl", "Al2O3"])
+    assert kept == ["Al2O3", "NaCl", "Al2O3"]
+
+
+def test_screen_formulas_accepts_any_notation():
+    # Parenthesised and reordered notations of the same composition.
+    assert f.screen_formulas(["O3Al2", "Al2(O)3"]) == ["O3Al2", "Al2(O)3"]
+
+
+def test_screen_formulas_without_pauling_test_is_more_permissive():
+    # Te-rich phosphorus chalcogenides fail the Pauling electronegativity test
+    # but are still charge neutral under the icsd24 oxidation-state set.
+    formulas = ["TiTe4P", "VTe5P", "CrTe7P2"]
+    assert f.screen_formulas(formulas) == []
+    assert f.screen_formulas(formulas, use_en=False) == formulas
+
+
+def test_screen_formulas_empty_input():
+    assert f.screen_formulas([]) == []

@@ -9,6 +9,8 @@ This is a *download-free* workflow. The heavy bulk-database download scripts
 
 - **`generate_formulas.py`** — enumerate SMACT-valid candidate compositions over an
 element universe and write `data/formulas/candidates.csv`;
+- **`merge_known_formulas.py`** — merge the local COD/MP/OQMD formula lists into a
+  single `datasets/known_formulas.csv` holding every unique formula exactly once;
 - **`find_novel_formulas.py`** — flag which candidates are absent from a supplied
 *known-formulas* list (`data/formulas/known_formulas.csv`) and rank them;
 - **`search_known_formulas.py`** — ask the live databases (COD / OQMD / JARVIS)
@@ -32,13 +34,15 @@ whether a proposed formula already exists, without downloading anything.
                        |
                        v
         generate_formulas.py  ---------------> data/formulas/candidates.csv
-                       |
-                       v
-   known_formulas.csv (your reference list)     search_known_formulas.py
-                       |                                  (live COD/OQMD/JARVIS lookup)
-                       v
-        find_novel_formulas.py
-                       |
+                       |                                  |
+                       v                                  |
+   datasets/known_formulas.csv (unique COD+MP+OQMD         |
+   formulas, one row each - build it with                  |
+   scripts/merge_known_formulas.py)                        |
+                       |                                  |
+                       v                                  v
+        find_novel_formulas.py  ---------------->  search_known_formulas.py
+                       |                          (live COD/OQMD/JARVIS lookup)
                        v
         data/formulas/novel_formulas.csv
                        |
@@ -46,13 +50,23 @@ whether a proposed formula already exists, without downloading anything.
     frozen CrystalFNO (your model) ---> predicted structures
 ```
 
-**What is the *known* list?** By default the tool reads `data/formulas/known_formulas.csv`
-(columns `formula, database, database_id, anonymous_formula, elements`). The original
-pipeline built this from bulk database metadata downloads; those downloaders are no
-longer shipped here. You can instead supply your own reference list of formulas you
-want to screen against — e.g. an export from COD/OQMD/JARVIS or a curated file. Without
-a known list, novelty flags still report element/anonymous novelty but there is no
-reference to subtract from.
+**What is the *known* list?** There are two ways to supply it:
+
+1. **Merged local datasets (default for the generator scripts).** If you have the
+   local COD / MP / OQMD formula extracts, `scripts/merge_known_formulas.py`
+   combines `datasets/{cod,mp,oqmd}_formulas.csv` into
+   `datasets/known_formulas.csv`, which contains **every unique formula exactly
+   once** (columns `formula, databases`). The `databases` column keeps track of
+   which sources contain the formula, so nothing is lost by merging. Candidate
+   generation with `--filter-known` then drops every formula present in that file.
+2. **Your own reference list.** `--known` / `--known-csv` accept any CSV with a
+   `formula` column — e.g. an export from COD/OQMD/JARVIS or a curated file. The
+   legacy per-database schema (`formula, database, anonymous_formula, elements`)
+   is understood too, and is what gives the `found_in_<db>` /
+   `novel_anonymous_formula` flags their per-database meaning.
+
+Without a known list, novelty flags still report element/anonymous novelty but
+there is no reference to subtract from.
 
 ---
 
@@ -122,15 +136,70 @@ Two enumeration regimes (driven by SMACT building blocks):
 > Enumerating *every* 3-4 element combination of the default universe can be
 > large. Use `--elements`, `--num-elements` and `--max-stoich` to scope a run.
 
-## 5. Screen for novelty
+### 4.1 Generate only database-unseen candidates (`--filter-known`)
+
+The example scripts (`examples/<system>/generate_candidates.py` and
+`examples/generate_candidates.py`) wrap generation and novelty screening into one
+command: they enumerate SMACT-valid candidates, drop every formula that already
+appears in the merged known-formula list and return a maximally diverse subset.
 
 ```bash
-python scripts/find_novel_formulas.py
+cd examples/double_perovskites
+python generate_candidates.py -n 1000 --filter-known -o novel_1000.txt
+python generate_candidates.py -n 500 --filter-known --known-csv ../../datasets/known_formulas.csv
+python generate_candidates.py -n 500 --filter-known --db cod mp   # per-database subset
+```
+
+- `--filter-known` — exclude formulas already in the known reference; this picks
+  up `datasets/known_formulas.csv` automatically when it exists;
+- `--known-csv PATH` — filter against a specific known-formulas CSV instead
+  (any file with a `formula` column; takes precedence over `--db`);
+- `--db cod mp` — fall back to the individual `datasets/{cod,mp,oqmd}_formulas.csv`
+  files and use only those databases;
+- `--no-diverse` — keep enumeration order instead of a spread-out subset.
+
+## 5. Screen for novelty
+
+### 5.1 Build the unique-formula reference (once)
+
+```bash
+python scripts/merge_known_formulas.py                # all: cod + mp + oqmd
+python scripts/merge_known_formulas.py --db cod mp    # subset
+```
+
+This reads `datasets/{cod,mp,oqmd}_formulas.csv` (produced by
+`scripts/extract_database_formulas.py`) and writes `datasets/known_formulas.csv`
+with **every unique formula exactly once**:
+
+```
+formula,databases,anonymous_formula,elements,num_elements
+Ac,cod;mp;oqmd,A,Ac,1
+AcAg2As2,cod;mp,ABC3,Ac Ag As,3
+NbAl2Cr,cod;mp;oqmd,ABC2,Al Cr Nb,3
+```
+
+- `databases` records which sources contain the formula, so merging loses no
+  provenance (a formula present in all three databases is still a single row);
+- `anonymous_formula` / `elements` are derived once (pymatgen) and make the
+  element-combination and anonymous-stoichiometry novelty levels meaningful; pass
+  `--no-metadata` for a faster formula-only build;
+- formulas are stored in the flattened notation the generator emits
+  (`Ac(AgAs)2` -> `AcAg2As2`), so membership tests compare like with like instead
+  of matching strings literally;
+- the file lives in the git-ignored `datasets/` folder and is rebuilt with one
+  command.
+
+### 5.2 Screen a candidates file
+
+```bash
+python scripts/find_novel_formulas.py                                    # datasets/known_formulas.csv
+python scripts/find_novel_formulas.py --known datasets/known_formulas.csv
 python scripts/find_novel_formulas.py --novel-only
 python scripts/find_novel_formulas.py --with-distance
 ```
 
-Input: SMACT candidates + a known-formulas CSV. Output:
+Input: SMACT candidates + a known-formulas CSV (`--known` accepts either the merged
+`formula, databases` file or the per-database schema). Output:
 `data/formulas/novel_formulas.csv` with per-row flags, e.g.
 `found_in_cod`, `novel_exact_formula`, `novel_element_combination`,
 `novel_anonymous_formula`, plus SMACT flags and (with `--with-distance`) the
@@ -213,9 +282,11 @@ src/                          # top-level modules + subpackages (import directly
   novelty/     canonicalize.py filter.py
   validation/  dataset.py
 scripts/     generate_formulas.py find_novel_formulas.py search_known_formulas.py
+             extract_database_formulas.py merge_known_formulas.py (unique-formula CSV)
 src/databases/ (COD/OQMD/JARVIS/AFLOW clients) and bulk-download scripts were removed.
 tests/       test_formula_utils.py test_structure_utils.py test_smact.py test_novelty.py
 data/formulas/{candidates,known_formulas,novel_formulas}.csv
+datasets/{cod,mp,oqmd}_formulas.csv  ->  datasets/known_formulas.csv (unique union)
 logs/
 ```
 
@@ -239,8 +310,9 @@ out of scope, and deliberately not faked here.
 
 ## 11. Known limitations
 
-- Novelty flags are only as good as the supplied `known_formulas.csv` and, for the
-  live lookup, the databases reachable at query time.
+- Novelty flags are only as good as the supplied known-formula reference (e.g. the
+  merged `datasets/known_formulas.csv`) and, for the live lookup, the databases
+  reachable at query time.
 - Live per-formula lookups hit COD / OQMD / JARVIS one query at a time; these
   servers throttle sustained use and can be slow or unreachable from some networks.
 - Composition-distance ranking uses the simple 118-D Euclidean baseline — treat it

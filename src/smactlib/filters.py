@@ -8,6 +8,7 @@ and never raise; invalid formulas simply evaluate to ``False``.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 
 from formula_utils import safe_normalize_formula
 from .generator import oxidation_states
@@ -81,3 +82,33 @@ def electronegativity_valid(
     """Pauling electronegativity condition (interpretable only when the
     composition is also charge neutral)."""
     return _validity(formula, oxidation_set, use_en=True, include_alloys=include_alloys)
+
+
+def screen_formulas(
+    formulas: Iterable[str],
+    oxidation_set: str = "icsd24",
+    use_en: bool = True,
+    include_alloys: bool = True,
+) -> list[str]:
+    """Keep only the formulas that pass :func:`smact_valid`.
+
+    Order and duplicates of the input are preserved, so this can be dropped
+    into any enumeration pipeline as a chemical-plausibility filter. Formulas
+    that SMACT cannot interpret are dropped rather than raising.
+
+    Parameters
+    ----------
+    formulas
+        Candidate formulas (any notation accepted by the formula utilities).
+    oxidation_set
+        SMACT oxidation-state set name (default ``icsd24``).
+    use_en
+        Apply the Pauling electronegativity test in addition to charge balance.
+    include_alloys
+        Auto-accept all-metallic compositions as alloys.
+    """
+    return [
+        f for f in formulas
+        if smact_valid(f, oxidation_set=oxidation_set, use_en=use_en,
+                       include_alloys=include_alloys)
+    ]

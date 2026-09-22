@@ -1,4 +1,0 @@
-database_id,reduced_formula,elements,nsites,status,structure_file,volume,database
-cod1,AlCr,Al Cr,2,valid,,1.0,cod
-cod2,NbAl3,Al Nb,4,valid,,1.0,cod
-cod3,Al2CrNb,Al Cr Nb,4,valid,,1.0,cod
