@@ -28,6 +28,14 @@ datasets/
 data/formulas/known_cod.csv
 data/formulas/known_oqmd.csv
 
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.pdf
+*~
+
 # OS / editor
 .DS_Store
 Thumbs.db
